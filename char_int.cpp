@@ -14,7 +14,6 @@ int main(){
     
   
 }
-Get-ChildItem -Recurse -Include *.js,*.jsx,*.ts,*.tsx | ForEach-Object {
-    $lineCount = (Get-Content $_.FullName).Count
-    "$($_.FullName),$lineCount"
-} > component_document.csv
+
+(for /R %f in (*.js *.jsx *.ts *.tsx) do @find /c /v "" "%f") > component_document.txt
+
