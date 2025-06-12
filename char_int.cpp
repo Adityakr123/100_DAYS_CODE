@@ -14,3 +14,7 @@ int main(){
     
   
 }
+Get-ChildItem -Recurse -Include *.js,*.jsx,*.ts,*.tsx | ForEach-Object {
+    $lineCount = (Get-Content $_.FullName).Count
+    "$($_.FullName),$lineCount"
+} > component_document.csv
