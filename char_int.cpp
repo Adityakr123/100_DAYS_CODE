@@ -17,4 +17,5 @@ int main(){
 
 (for /R %f in (*.js *.jsx *.ts *.tsx) do @for /f %%l in ('find /c /v "" "%f"') do @echo %~nxf,%%l) > component_document.csv
 
+@echo File,LineCount > component_document.csv && for /R %f in (*.js *.jsx *.ts *.tsx) do @for /f "tokens=3 delims=:" %l in ('find /c /v "" "%f"') do @echo %~nxf,%l >> component_document.csv
 
