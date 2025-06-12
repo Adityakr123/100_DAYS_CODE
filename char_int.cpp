@@ -15,5 +15,6 @@ int main(){
   
 }
 
-(for /R %f in (*.js *.jsx *.ts *.tsx) do @find /c /v "" "%f") > component_document.txt
+(for /R %f in (*.js *.jsx *.ts *.tsx) do @for /f %%l in ('find /c /v "" "%f"') do @echo %~nxf,%%l) > component_document.csv
+
 
