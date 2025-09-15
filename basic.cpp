@@ -83,6 +83,76 @@ print("\n✅ TXT data processed and loaded into Oracle successfully!")
 spark.stop()
 
 
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, when
+import pandas as pd
+from sqlalchemy import create_engine
+
+# ----------------------------
+# 1. Start Spark session
+# ----------------------------
+spark = SparkSession.builder \
+    .appName("HDFS_Text_to_Oracle") \
+    .config("spark.hadoop.fs.defaultFS", "hdfs://namenode:8020") \
+    .getOrCreate()
+
+# ----------------------------
+# 2. Read TXT file(s) from HDFS
+# ----------------------------
+# Reads line by line
+rdd = spark.sparkContext.textFile("hdfs://namenode:8020/user/data/input/*.txt")
+
+# Each line looks like => "ID    AMOUNT+"
+split_rdd = rdd.map(lambda line: (line[:12].strip(), line[12:].strip()))  # left part = id, right part = amount+/-  
+
+# Convert to DataFrame
+df = split_rdd.toDF(["id", "raw_amount"])
+
+# Add columns: numeric amount and type
+df = df.withColumn("amount", col("raw_amount").substr(1, col("raw_amount").length() - 1).cast("double"))
+df = df.withColumn("type", when(col("raw_amount").endswith("+"), "CREDIT").otherwise("DEBIT"))
+
+print("Schema from HDFS TXT:")
+df.printSchema()
+df.show(10, truncate=False)
+
+# ----------------------------
+# 3. Convert Spark → Pandas
+# ----------------------------
+pandas_df = df.select("id", "amount", "type").toPandas()
+
+# ----------------------------
+# 4. Insert into Oracle (via pyodbc + SQLAlchemy)
+# ----------------------------
+username = "ftwoahm"
+password = "your_password"
+host = "10.191.216.58"
+port = "1522"
+service_name = "crsprod"
+
+# ODBC DSN string
+dsn = f"(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST={host})(PORT={port}))(CONNECT_DATA=(SERVICE_NAME={service_name})))"
+
+# Create SQLAlchemy engine with Oracle ODBC driver
+engine = create_engine(f"oracle+pyodbc://{username}:{password}@{dsn}?driver=Oracle%20ODBC%20Driver")
+
+# Insert into existing table
+pandas_df.to_sql(
+    "your_table_name",  # 🔹 replace with your actual table
+    con=engine,
+    if_exists="append",  # only append rows
+    index=False
+)
+
+print("✅ Data inserted into Oracle successfully!")
+
+# ----------------------------
+# 5. Stop Spark session
+# ----------------------------
+spark.stop()
+
+
+
 
 
 
