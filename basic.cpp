@@ -153,6 +153,82 @@ spark.stop()
 
 
 
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, when
+import pandas as pd
+import pyodbc
+
+# ----------------------------
+# 1. Start Spark session
+# ----------------------------
+spark = SparkSession.builder \
+    .appName("HDFS_Text_to_Oracle") \
+    .config("spark.hadoop.fs.defaultFS", "hdfs://namenode:8020") \
+    .getOrCreate()
+
+# ----------------------------
+# 2. Read TXT file(s) from HDFS
+# ----------------------------
+# Reads line by line from HDFS
+rdd = spark.sparkContext.textFile("hdfs://namenode:8020/user/data/input/*.txt")
+
+# Assuming fixed-width: left part = id, right part = amount(+/-)
+split_rdd = rdd.map(lambda line: (line[:12].strip(), line[12:].strip()))
+
+# Convert to DataFrame
+df = split_rdd.toDF(["id", "raw_amount"])
+
+# Add numeric amount + transaction type
+df = df.withColumn("amount", col("raw_amount").substr(1, col("raw_amount").length() - 1).cast("double"))
+df = df.withColumn("type", when(col("raw_amount").endswith("+"), "CREDIT").otherwise("DEBIT"))
+
+print("Schema from HDFS TXT:")
+df.printSchema()
+df.show(10, truncate=False)
+
+# ----------------------------
+# 3. Convert Spark → Pandas
+# ----------------------------
+pandas_df = df.select("id", "amount", "type").toPandas()
+
+# ----------------------------
+# 4. Insert into Oracle (pyodbc)
+# ----------------------------
+username = "ftwoahm"
+password = "your_password"   # 🔹 replace
+host = "10.191.216.58"
+port = "1522"
+service_name = "crsprod"
+
+# Build DSN string
+dsn = f"(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST={host})(PORT={port}))(CONNECT_DATA=(SERVICE_NAME={service_name})))"
+
+# Connect using Oracle ODBC Driver
+conn = pyodbc.connect(
+    f"DRIVER={{Oracle ODBC Driver}};DBQ={dsn};UID={username};PWD={password}"
+)
+cursor = conn.cursor()
+
+# Insert rows from pandas DataFrame
+for _, row in pandas_df.iterrows():
+    cursor.execute(
+        "INSERT INTO your_table_name (id, amount, type) VALUES (?, ?, ?)",
+        (row["id"], float(row["amount"]), row["type"])
+    )
+
+conn.commit()
+cursor.close()
+conn.close()
+
+print("✅ TXT data processed and loaded into Oracle successfully!")
+
+# ----------------------------
+# 5. Stop Spark session
+# ----------------------------
+spark.stop()
+
+
+
 
 
 
